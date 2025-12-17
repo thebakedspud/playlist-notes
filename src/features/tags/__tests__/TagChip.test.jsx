@@ -5,7 +5,8 @@ import TagChip from '../../tags/TagChip.jsx'
 describe('TagChip', () => {
   it('renders a pressed button for the provided tag', () => {
     render(<TagChip tag="drill" />)
-    const button = screen.getByRole('button', { name: /remove tag drill/i })
+    // Without onRemove, it's a filter-only chip
+    const button = screen.getByRole('button', { name: /filter by tag drill/i })
     expect(button).toHaveAttribute('aria-pressed', 'true')
   })
 
@@ -41,7 +42,8 @@ describe('TagChip', () => {
   it('handles filter-only chips', () => {
     const onFilter = vi.fn()
     render(<TagChip tag="focus" onFilter={onFilter} />)
-    fireEvent.click(screen.getByRole('button', { name: /remove tag focus/i }))
+    // Without onRemove, it's labeled as a filter button
+    fireEvent.click(screen.getByRole('button', { name: /filter by tag focus/i }))
     expect(onFilter).toHaveBeenCalledWith('focus')
   })
 })

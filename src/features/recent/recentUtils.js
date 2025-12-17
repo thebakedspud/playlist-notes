@@ -64,6 +64,10 @@ export function createRecentCandidate(meta, options = {}) {
     typeof meta.provider === 'string' && meta.provider.trim()
       ? meta.provider.trim().toLowerCase()
       : null
+
+  // GUARD: Never create recent candidates for demo playlists
+  // Demo playlists should not appear in recent playlists list
+  if (provider === 'demo') return null
   const playlistId =
     typeof meta.playlistId === 'string' && meta.playlistId.trim()
       ? meta.playlistId.trim()

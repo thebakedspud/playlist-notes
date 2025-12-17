@@ -55,7 +55,7 @@ export const playlistActions = {
    * Save note optimistically (before API call)
    * @param {string} trackId
    * @param {string} note
-   * @param {{ timestampMs?: number | null, timestampEndMs?: number | null }} [extra]
+   * @param {{ id?: string, timestampMs?: number | null, timestampEndMs?: number | null }} [extra]
    * @returns {Object}
    */
   saveNoteOptimistic(trackId, note, extra = {}) {
@@ -65,6 +65,9 @@ export const playlistActions = {
     }
     const payload = { trackId, note: trimmed }
     if (extra && typeof extra === 'object') {
+      if ('id' in extra && extra.id) {
+        payload.id = extra.id
+      }
       if ('timestampMs' in extra) {
         payload.timestampMs = extra.timestampMs
       }
@@ -163,12 +166,13 @@ export const playlistActions = {
    * @param {Record<string, string[]>} tagsByTrack
    * @param {Array} baselineTracks - For comparison during merge
    * @param {string|null} importStamp - Timestamp for import
+   * @param {'spotify' | 'youtube' | 'soundcloud' | 'demo' | null} provider - Playlist provider
    * @returns {Object}
    */
-  setTracksWithNotes(tracks, notesByTrack, tagsByTrack, baselineTracks = [], importStamp = null) {
+  setTracksWithNotes(tracks, notesByTrack, tagsByTrack, baselineTracks = [], importStamp = null, provider = null) {
     return {
       type: 'TRACKS_SET_WITH_NOTES',
-      payload: { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp }
+      payload: { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp, provider }
     }
   },
 

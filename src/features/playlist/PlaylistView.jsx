@@ -98,6 +98,8 @@ function resolveVirtualizationPreference(trackCount) {
  *   visible. This enables App to focus the correct track even when adapter order differs from
  *   display order (e.g., oldest-to-newest import with newest-first sort).
  * @param {'playlist' | 'podcast'} [props.viewMode]
+ * @param {boolean} [props.isDemoPlaylist] - When true, shows demo banner and disables editing
+ * @param {() => void} [props.onExitDemo] - Handler for "Import my own playlist" button in demo mode
  */
 export default function PlaylistView({
   playlistTitle,
@@ -137,6 +139,8 @@ export default function PlaylistView({
   initialSyncStatus,
   cachedViewInfo = null,
   viewMode = 'playlist',
+  isDemoPlaylist = false,
+  onExitDemo,
 }) {
   const MOCK_PREFIX = 'MOCK DATA ACTIVE - '
   const isPodcastMode = viewMode === 'podcast'
@@ -578,7 +582,7 @@ export default function PlaylistView({
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {canReimport && (
+          {canReimport && !isDemoPlaylist && (
             <button
               type="button"
               ref={reimportBtnRef}
@@ -591,9 +595,11 @@ export default function PlaylistView({
               {showReimportSpinner ? 'Re-importing...' : 'Re-import'}
             </button>
           )}
-          <button type="button" className="btn" onClick={onClear} aria-label="Clear all data">
-            Clear
-          </button>
+          {!isDemoPlaylist && (
+            <button type="button" className="btn" onClick={onClear} aria-label="Clear all data">
+              Clear
+            </button>
+          )}
           <button type="button" className="btn" onClick={onBack}>
             Back
           </button>
@@ -651,7 +657,7 @@ export default function PlaylistView({
         </div>
       )}
 
-      {cachedBannerDetails && (
+      {cachedBannerDetails && !isDemoPlaylist && (
         <div
           role="status"
           style={{
@@ -664,6 +670,58 @@ export default function PlaylistView({
           }}
         >
           {cachedBannerDetails.text}
+        </div>
+      )}
+
+      {isDemoPlaylist && (
+        <div
+          role="status"
+          aria-label="Demo playlist information"
+          style={{
+            marginBottom: 12,
+            padding: '12px 16px',
+            background: 'var(--surface)',
+            borderRadius: 6,
+            border: '1px solid var(--border)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+            <span
+              className="demo-badge"
+              style={{
+                display: 'inline-block',
+                padding: '2px 8px',
+                background: 'var(--accent, #4caf50)',
+                color: 'var(--accent-foreground, #fff)',
+                borderRadius: 4,
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                flexShrink: 0,
+              }}
+            >
+              Demo
+            </span>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <p style={{ margin: 0, color: 'var(--foreground)', fontSize: '0.9rem' }}>
+                Classic samples with timestamp annotations. Try adding your own notes and tags!
+              </p>
+              <p style={{ margin: '8px 0 0', color: 'var(--muted)', fontSize: '0.8rem' }}>
+                Changes won't be saved - this is just for trying out the features.
+              </p>
+            </div>
+            {onExitDemo && (
+              <button
+                type="button"
+                className="btn primary"
+                onClick={onExitDemo}
+                style={{ flexShrink: 0 }}
+              >
+                Import my own playlist
+              </button>
+            )}
+          </div>
         </div>
       )}
 

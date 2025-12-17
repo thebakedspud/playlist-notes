@@ -18,6 +18,7 @@ import { computeHasLocalNotes, computeAllCustomTags } from './helpers.js'
  * @property {Array<any>} tracks
  * @property {Record<string, NoteEntry[]>} notesByTrack
  * @property {Record<string, string[]>} tagsByTrack
+ * @property {'spotify' | 'youtube' | 'soundcloud' | 'demo' | null} provider
  * @property {{ trackId: string | null, draft: string, error: string | null }} editingState
  * @property {{ hasLocalNotes: boolean, allCustomTags: string[] }} _derived
  */
@@ -30,6 +31,7 @@ export const initialPlaylistState = {
   tracks: [],
   notesByTrack: {},
   tagsByTrack: {},
+  provider: null,
   editingState: {
     trackId: null,
     draft: '',
@@ -64,6 +66,7 @@ function normalizeTimestampMs(value) {
 
 function createNoteEntry(body, payload = {}) {
   const entry = {
+    id: payload.id || crypto.randomUUID(),
     body,
     createdAt: Date.now()
   }
@@ -80,6 +83,10 @@ function createNoteEntry(body, payload = {}) {
 
 /**
  * Playlist reducer - handles all playlist state transitions
+ *
+ * NOTE: Demo playlists are interactive - users can add/edit notes and tags locally.
+ * Demo changes are not persisted (sync layer prevents server/localStorage writes).
+ *
  * @param {Object} state
  * @param {Object} action
  * @returns {Object}
@@ -285,14 +292,15 @@ export function playlistReducer(state, action) {
     }
 
     case 'TRACKS_SET_WITH_NOTES': {
-      const { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp } = action.payload
+      const { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp, provider } = action.payload
       const merged = attachNotesToTracks(tracks, notesByTrack, tagsByTrack, baselineTracks, { importStamp })
 
       return recomputeDerived({
         ...state,
         tracks: merged,
         notesByTrack,
-        tagsByTrack
+        tagsByTrack,
+        provider: provider || null
       })
     }
 

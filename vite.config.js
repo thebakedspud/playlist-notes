@@ -11,6 +11,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './vitest.setup.js',
     globals: true,
+    pool: 'threads',
+    testTimeout: 15000,
     css: false,
     coverage: {
       provider: 'v8',

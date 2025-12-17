@@ -9,6 +9,7 @@ import { groupRemoteNotes } from '../../utils/notesTagsData.js'
 import { createTagSyncScheduler } from '../tags/tagSyncQueue.js'
 import { PlaylistStateContext, PlaylistDispatchContext, PlaylistSyncContext } from './contexts.js'
 import { notifyDeviceContextStale } from '../../lib/deviceState.js'
+import { flushDeleteQueue } from '../notes/noteDeleteQueue.js'
 
 /** @typedef {import('../import/usePlaylistImportController.js').BackgroundSyncState} BackgroundSyncState */
 
@@ -64,7 +65,7 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
   useEffect(() => {
     initialSyncStatusRef.current = 'idle'
     syncAttemptedRef.current = false
-  }, [anonContext?.deviceId])
+  }, [anonContext?.deviceId, anonContext?.anonId])
 
   const markSyncError = useCallback(
     (payload) => {
@@ -151,16 +152,12 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
   )
 
   // Remote sync: fetch notes/tags from server on mount when anonId is available
+  // Note: We intentionally don't check for local data - after recovery restore,
+  // the user may have no local tracks yet but needs to fetch remote notes
   useEffect(() => {
-    if (!anonContext?.deviceId) return
+    if (!anonContext?.deviceId || !anonContext?.anonId) return
     if (initialSyncStatusRef.current === 'complete') return
     if (syncAttemptedRef.current) return
-    const hasAnyLocalData =
-      Array.isArray(initialState?.tracks) && initialState.tracks.length > 0
-    if (!hasAnyLocalData) {
-      updateInitialSyncStatus({ status: 'complete', lastError: null })
-      return
-    }
     syncAttemptedRef.current = true
 
     let cancelled = false
@@ -285,7 +282,7 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
         cancelIdleCallback(deferredHandle)
       }
     }
-  }, [anonContext?.deviceId, initialState?.tracks, markSyncError, updateInitialSyncStatus])
+  }, [anonContext?.deviceId, anonContext?.anonId, initialState?.tracks, markSyncError, updateInitialSyncStatus])
 
   // Helper to send tag update to server
   const sendTagUpdate = useCallback(
@@ -353,10 +350,28 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
     }
   }, [anonContext?.deviceId, flushPendingTagQueue, hydratePendingTagQueue])
 
+  // Flush pending note deletions on mount and when coming online
+  useEffect(() => {
+    if (!anonContext?.deviceId) return undefined
+    flushDeleteQueue(apiFetch)
+    if (typeof window === 'undefined') return undefined
+    const handleOnline = () => {
+      flushDeleteQueue(apiFetch)
+    }
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [anonContext?.deviceId])
+
   // Expose sync method for components to use
   const syncTrackTags = useCallback(
     (trackId, tags) => {
       if (!trackId) return Promise.resolve()
+      // GUARD: Skip sync for demo playlists (read-only)
+      if (state.provider === 'demo') {
+        return Promise.resolve()
+      }
       upsertPendingTagUpdate(trackId, tags)
       const scheduler = tagSyncSchedulerRef.current
       if (scheduler) {
@@ -364,7 +379,7 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
       }
       return sendTagUpdate(trackId, tags)
     },
-    [sendTagUpdate, upsertPendingTagUpdate],
+    [state.provider, sendTagUpdate, upsertPendingTagUpdate],
   )
 
   // Memoize context value to prevent unnecessary re-renders

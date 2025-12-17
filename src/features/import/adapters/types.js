@@ -5,7 +5,7 @@
 
 /**
  * Known playlist providers the app supports.
- * @typedef {'spotify' | 'youtube' | 'soundcloud'} PlaylistProvider
+ * @typedef {'spotify' | 'youtube' | 'soundcloud' | 'demo'} PlaylistProvider
  */
 
 /**

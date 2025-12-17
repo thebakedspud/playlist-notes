@@ -51,19 +51,23 @@ function TagChipInner(props, ref) {
     }
   }
 
+  const hasRemove = typeof onRemove === 'function'
+  const ariaLabel = hasRemove ? `Remove tag ${tag}` : `Filter by tag ${tag}`
+  const title = hasRemove ? `Remove tag ${tag}` : `Filter by tag ${tag}`
+
   return (
     <button
       ref={ref}
       type="button"
       className={`tag-chip ${className}`.trim()}
       aria-pressed="true"
-      aria-label={`Remove tag ${tag}`}
-      title={`Remove tag ${tag}`}
+      aria-label={ariaLabel}
+      title={title}
       onClick={handleClick}
       {...rest}
     >
       <span className="tag-chip__label">{tag}</span>
-      <span aria-hidden="true" className="tag-chip__remove">{'\u00d7'}</span>
+      {hasRemove && <span aria-hidden="true" className="tag-chip__remove">{'\u00d7'}</span>}
     </button>
   )
 }

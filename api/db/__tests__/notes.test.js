@@ -16,6 +16,8 @@ let notesInsertMock;
 let notesUpdateResponse;
 let notesUpdatePayload;
 let notesUpdateQueries;
+let notesDeleteResponse;
+let notesDeleteQueries;
 
 vi.mock('../../_lib/supabase.js', () => ({
   getAdminClient: () => adminClient,
@@ -74,6 +76,18 @@ function createAdminClient() {
     return query;
   };
 
+  notesDeleteQueries = [];
+  const deleteFactory = () => {
+    const query = {
+      eq: vi.fn(() => query),
+      then(onFulfilled, onRejected) {
+        return Promise.resolve(notesDeleteResponse).then(onFulfilled, onRejected);
+      },
+    };
+    notesDeleteQueries.push(query);
+    return query;
+  };
+
   return {
     from: vi.fn((table) => {
       if (table === 'notes') {
@@ -81,6 +95,7 @@ function createAdminClient() {
           select: vi.fn(() => createSelectQuery()),
           insert: notesInsertMock,
           update: updateFactory,
+          delete: deleteFactory,
         };
       }
       throw new Error(`Unexpected table ${table}`);
@@ -154,6 +169,8 @@ beforeEach(async () => {
   };
   notesUpdatePayload = undefined;
   notesUpdateQueries = [];
+  notesDeleteResponse = { error: null };
+  notesDeleteQueries = [];
   getAnonContextMock.mockReset();
   touchLastActiveMock.mockReset();
   withCorsMock.mockClear();
@@ -347,24 +364,12 @@ describe('api/db/notes handler', () => {
     });
   });
 
-  it('updates timestamp when payload includes timestampMs', async () => {
+  it('creates a new note row when payload includes timestampMs', async () => {
     getAnonContextMock.mockResolvedValueOnce({ anonId: 'anon-1' });
     notesSelectQueue.push({
       data: { id: 'note-1', body: 'hi', tags: [], timestamp_ms: null },
       error: null,
     });
-    notesUpdateResponse = {
-      data: {
-        id: 'note-1',
-        track_id: 'track-9',
-        body: 'updated',
-        tags: [],
-        timestamp_ms: 55555,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:05Z',
-      },
-      error: null,
-    };
 
     const req = createMockReq({
       method: 'POST',
@@ -375,19 +380,12 @@ describe('api/db/notes handler', () => {
 
     await handler(req, res);
 
-    expect(notesUpdatePayload).toMatchObject({ timestamp_ms: 55555 });
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.body).toEqual({
-      note: {
-        id: 'note-1',
-        trackId: 'track-9',
-        body: 'updated',
-        tags: [],
-        timestampMs: 55555,
-        createdAt: '2024-01-01T00:00:00Z',
-        updatedAt: '2024-01-01T00:00:05Z',
-      },
-    });
+    // Phase 1 semantics: note bodies are append-only, so this
+    // should create a new row with a normalized timestamp.
+    expect(notesInsertMock).toHaveBeenCalledTimes(1);
+    expect(notesInsertPayload).toMatchObject({ timestamp_ms: 55555 });
+    expect(notesUpdateQueries).toHaveLength(0);
+    expect(res.status).toHaveBeenCalledWith(201);
   });
 
   it('rejects invalid tags that exceed length limits', async () => {
@@ -405,6 +403,77 @@ describe('api/db/notes handler', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.body?.error).toMatch(/Tags must be/);
+  });
+
+  it('allows tags-only update when multiple notes exist for the same track', async () => {
+    getAnonContextMock.mockResolvedValue({ anonId: 'anon-1' });
+
+    // Create first note with body
+    const req1 = createMockReq({
+      method: 'POST',
+      headers: { 'x-device-id': 'device-1' },
+      body: { trackId: 'track-9', body: 'first note' },
+    });
+    const res1 = createMockRes();
+    await handler(req1, res1);
+
+    // Create second note with body (now there are 2+ rows for this track)
+    const req2 = createMockReq({
+      method: 'POST',
+      headers: { 'x-device-id': 'device-1' },
+      body: { trackId: 'track-9', body: 'second note' },
+    });
+    const res2 = createMockRes();
+    await handler(req2, res2);
+
+    // Now try tags-only POST - this should NOT fail with PGRST116
+    // Mock .maybeSingle() to simulate multiple rows error
+    notesSelectQueue.push({
+      data: null,
+      error: { code: 'PGRST116', message: 'Multiple rows returned' },
+    });
+
+    const tagsReq = createMockReq({
+      method: 'POST',
+      headers: { 'x-device-id': 'device-1' },
+      body: { trackId: 'track-9', tags: ['rock', 'metal'] },
+    });
+    const tagsRes = createMockRes();
+
+    await handler(tagsReq, tagsRes);
+
+    // Should succeed (not return 500 error)
+    expect(tagsRes.status).not.toHaveBeenCalledWith(500);
+    expect(tagsRes.statusCode).not.toBe(500);
+  });
+
+  it('creates multiple notes for the same track without updating', async () => {
+    getAnonContextMock.mockResolvedValue({ anonId: 'anon-1' });
+
+    const req1 = createMockReq({
+      method: 'POST',
+      headers: { 'x-device-id': 'device-1' },
+      body: { trackId: 'track-9', body: 'first note' },
+    });
+    const res1 = createMockRes();
+
+    await handler(req1, res1);
+
+    const req2 = createMockReq({
+      method: 'POST',
+      headers: { 'x-device-id': 'device-1' },
+      body: { trackId: 'track-9', body: 'second note' },
+    });
+    const res2 = createMockRes();
+
+    await handler(req2, res2);
+
+    // Phase 1: note bodies are append-only; we never update
+    // an existing note row when a body is provided.
+    expect(notesInsertMock).toHaveBeenCalledTimes(2);
+    expect(notesUpdateQueries).toHaveLength(0);
+    expect(res1.status).toHaveBeenCalledWith(201);
+    expect(res2.status).toHaveBeenCalledWith(201);
   });
 
 
@@ -477,5 +546,64 @@ describe('api/db/notes handler', () => {
     expect(res.body).toEqual({
       error: 'Supabase configuration missing server-side',
     });
+  });
+
+  it('deletes note by noteId when both trackId and noteId are present in query', async () => {
+    getAnonContextMock.mockResolvedValueOnce({ anonId: 'anon-1' });
+
+    const req = createMockReq({
+      method: 'DELETE',
+      headers: { 'x-device-id': 'device-1' },
+      query: { trackId: 'track-wrong', noteId: 'note-correct' },
+      url: '/api/db/notes?trackId=track-wrong&noteId=note-correct',
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.body).toEqual({ ok: true });
+
+    // Should delete by noteId, not trackId
+    const [deleteQuery] = notesDeleteQueries;
+    expect(deleteQuery.eq).toHaveBeenCalledWith('id', 'note-correct');
+    expect(deleteQuery.eq).toHaveBeenCalledWith('anon_id', 'anon-1');
+    expect(deleteQuery.eq).not.toHaveBeenCalledWith('id', 'track-wrong');
+  });
+
+  it('deletes note by noteId from query parameter', async () => {
+    getAnonContextMock.mockResolvedValueOnce({ anonId: 'anon-1' });
+
+    const req = createMockReq({
+      method: 'DELETE',
+      headers: { 'x-device-id': 'device-1' },
+      query: { noteId: 'note-123' },
+      url: '/api/db/notes?noteId=note-123',
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    const [deleteQuery] = notesDeleteQueries;
+    expect(deleteQuery.eq).toHaveBeenCalledWith('id', 'note-123');
+    expect(deleteQuery.eq).toHaveBeenCalledWith('anon_id', 'anon-1');
+  });
+
+  it('returns 400 when DELETE request missing noteId', async () => {
+    getAnonContextMock.mockResolvedValueOnce({ anonId: 'anon-1' });
+
+    const req = createMockReq({
+      method: 'DELETE',
+      headers: { 'x-device-id': 'device-1' },
+      query: {},
+      url: '/api/db/notes',
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.body).toEqual({ error: 'Missing noteId parameter' });
   });
 });
