@@ -44,7 +44,7 @@ function getImportFn(provider) {
 
 /**
  * Get provider-specific mock payload.
- * @param {'spotify'|'youtube'|'soundcloud'} provider
+ * @param {'spotify'|'youtube'|'soundcloud'|'demo'} provider
  */
 function getMock(provider) {
   // @ts-ignore
@@ -115,7 +115,7 @@ function mergeUniqueTracks(prev, next, provider) {
 /**
  * Coerce any adapter payload (or mock) into a normalized adapter result.
  * Adds a small debug envelope when returning fallbacks.
- * @param {'spotify'|'youtube'|'soundcloud'} provider
+ * @param {'spotify'|'youtube'|'soundcloud'|'demo'} provider
  * @param {string} url
  * @param {any} payload
  * @param {{ isFallback?: boolean, lastErrorCode?: import('./adapters/types.js').AdapterErrorCode }} [meta]
@@ -270,7 +270,7 @@ export default function useImportPlaylist() {
 
   /**
    * Apply an adapter result to local state with dev-friendly telemetry.
-   * @param {'spotify'|'youtube'|'soundcloud'} provider
+   * @param {'spotify'|'youtube'|'soundcloud'|'demo'} provider
    * @param {string} url
    * @param {any} result
    */

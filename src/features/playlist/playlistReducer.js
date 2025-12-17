@@ -18,6 +18,7 @@ import { computeHasLocalNotes, computeAllCustomTags } from './helpers.js'
  * @property {Array<any>} tracks
  * @property {Record<string, NoteEntry[]>} notesByTrack
  * @property {Record<string, string[]>} tagsByTrack
+ * @property {'spotify' | 'youtube' | 'soundcloud' | 'demo' | null} provider
  * @property {{ trackId: string | null, draft: string, error: string | null }} editingState
  * @property {{ hasLocalNotes: boolean, allCustomTags: string[] }} _derived
  */
@@ -30,6 +31,7 @@ export const initialPlaylistState = {
   tracks: [],
   notesByTrack: {},
   tagsByTrack: {},
+  provider: null,
   editingState: {
     trackId: null,
     draft: '',
@@ -80,6 +82,17 @@ function createNoteEntry(body, payload = {}) {
 }
 
 /**
+ * Check if state is read-only (demo playlist)
+ * NOTE: Demo playlists are now interactive - users can add/edit notes and tags.
+ * Changes are not persisted (demo doesn't sync to server or localStorage recents).
+ * @param {Object} _state
+ * @returns {boolean}
+ */
+function isReadOnly(_state) {
+  return false // Demo is now interactive
+}
+
+/**
  * Playlist reducer - handles all playlist state transitions
  * @param {Object} state
  * @param {Object} action
@@ -89,6 +102,11 @@ export function playlistReducer(state, action) {
   switch (action.type) {
     // ===== Editing Lifecycle =====
     case 'NOTE_EDIT_START':
+      // GUARD: Prevent editing demo playlists
+      if (isReadOnly(state)) {
+        console.warn('Cannot edit demo playlist')
+        return state
+      }
       return {
         ...state,
         editingState: {
@@ -128,6 +146,11 @@ export function playlistReducer(state, action) {
 
     // ===== Note Operations =====
     case 'NOTE_SAVE_OPTIMISTIC': {
+      // GUARD: Prevent saving notes to demo playlists
+      if (isReadOnly(state)) {
+        console.warn('Cannot save notes to demo playlist')
+        return state
+      }
       const { trackId, note } = action.payload
       const existing = normalizeNotesList(state.notesByTrack[trackId] || [])
       const createdEntry = createNoteEntry(note, action.payload)
@@ -187,6 +210,11 @@ export function playlistReducer(state, action) {
     }
 
     case 'NOTE_DELETE': {
+      // GUARD: Prevent deleting notes from demo playlists
+      if (isReadOnly(state)) {
+        console.warn('Cannot delete notes from demo playlist')
+        return state
+      }
       const { trackId, noteIndex } = action.payload
       const existing = normalizeNotesList(state.notesByTrack[trackId] || [])
       const updated = existing.filter((_, i) => i !== noteIndex)
@@ -206,6 +234,11 @@ export function playlistReducer(state, action) {
     }
 
     case 'NOTE_RESTORE': {
+      // GUARD: Prevent restoring notes to demo playlists
+      if (isReadOnly(state)) {
+        console.warn('Cannot restore notes to demo playlist')
+        return state
+      }
       const { trackId, note, index } = action.payload
       const existing = normalizeNotesList(state.notesByTrack[trackId] || [])
       const noteList = normalizeNotesList([note])
@@ -232,6 +265,11 @@ export function playlistReducer(state, action) {
 
     // ===== Tag Operations =====
     case 'TAG_ADD': {
+      // GUARD: Prevent adding tags to demo playlists
+      if (isReadOnly(state)) {
+        console.warn('Cannot add tags to demo playlist')
+        return state
+      }
       const { trackId, tag } = action.payload
       const existing = state.tagsByTrack[trackId] || []
       const updated = [...existing, tag]
@@ -250,6 +288,11 @@ export function playlistReducer(state, action) {
     }
 
     case 'TAG_REMOVE': {
+      // GUARD: Prevent removing tags from demo playlists
+      if (isReadOnly(state)) {
+        console.warn('Cannot remove tags from demo playlist')
+        return state
+      }
       const { trackId, tag } = action.payload
       const existing = state.tagsByTrack[trackId] || []
       const updated = existing.filter(t => t !== tag)
@@ -286,14 +329,15 @@ export function playlistReducer(state, action) {
     }
 
     case 'TRACKS_SET_WITH_NOTES': {
-      const { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp } = action.payload
+      const { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp, provider } = action.payload
       const merged = attachNotesToTracks(tracks, notesByTrack, tagsByTrack, baselineTracks, { importStamp })
 
       return recomputeDerived({
         ...state,
         tracks: merged,
         notesByTrack,
-        tagsByTrack
+        tagsByTrack,
+        provider: provider || null
       })
     }
 

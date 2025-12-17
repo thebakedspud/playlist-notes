@@ -17,8 +17,26 @@ import { debugFocus } from '../../utils/debug.js';
 import usePersistentPlaylistCache from './usePersistentPlaylistCache.js';
 import { apiFetch } from '../../lib/apiClient.js';
 import { derivePlaylistIdentity } from './playlistIdentity.js';
+import {
+  DEMO_PLAYLIST_URL,
+  DEMO_PLAYLIST_ID,
+  DEMO_NOTES_BY_TRACK,
+  DEMO_TAGS_BY_TRACK,
+} from '../../data/demoPlaylist.js';
 
 const REFRESHING_FROM_CACHE_ANNOUNCEMENT = 'Showing saved playlist while refreshing the latest data.';
+
+/**
+ * Check if a URL is the demo playlist URL
+ * @param {string | null | undefined} url
+ * @returns {boolean}
+ */
+function isDemoPlaylistUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  // Normalize both URLs by removing query params and trailing slashes
+  const normalize = (str) => str.split('?')[0].replace(/\/+$/, '').toLowerCase();
+  return normalize(url) === normalize(DEMO_PLAYLIST_URL);
+}
 
 function normalizeSourceKey(raw) {
   if (typeof raw !== 'string') return '';
@@ -106,6 +124,7 @@ function formatRateLimitMessage(retryAt) {
  * @property {boolean} showReimportSpinner
  * @property {boolean} showLoadMoreSpinner
  * @property {(event?: import('react').FormEvent<HTMLFormElement>) => Promise<void>} handleImport
+ * @property {() => Promise<void>} handleImportDemo
  * @property {(recent: Record<string, any>) => Promise<{ ok: boolean, error?: string, stale?: boolean }>} handleSelectRecent
  * @property {() => Promise<void>} handleReimport
  * @property {(options?: { mode?: 'manual' | 'background', metaOverride?: ImportMeta }) => Promise<any>} handleLoadMore
@@ -385,10 +404,16 @@ export default function usePlaylistImportController({
           : fallbackKind;
       const targetScreen = resolvedContentKind === 'podcast' ? 'podcast' : 'playlist';
       const headingId = targetScreen === 'podcast' ? 'podcast-title' : 'playlist-title';
+
+      // DEMO PLAYLIST OVERRIDE: If importing the demo playlist URL, override provider to 'demo'
+      // This enables interactive demo mode and prevents demo from appearing in recent playlists
+      const isDemo = isDemoPlaylistUrl(sourceUrl);
       const meta = {
         ...EMPTY_IMPORT_META,
         ...rawMeta,
         contentKind: resolvedContentKind,
+        provider: isDemo ? 'demo' : rawMeta?.provider,
+        playlistId: isDemo ? DEMO_PLAYLIST_ID : rawMeta?.playlistId,
       };
 
       try {
@@ -404,8 +429,38 @@ export default function usePlaylistImportController({
           importMeta.provider === meta.provider &&
           importMeta.playlistId === meta.playlistId;
 
-        const nextNotesMap = ensureNotesEntries(notesByTrack, mapped);
-        const nextTagsMap = ensureTagsEntries(tagsByTrack, mapped);
+        let nextNotesMap = ensureNotesEntries(notesByTrack, mapped);
+        let nextTagsMap = ensureTagsEntries(tagsByTrack, mapped);
+
+        // Merge demo notes and tags if this is a demo playlist
+        if (isDemo) {
+          nextNotesMap = { ...nextNotesMap };
+          nextTagsMap = { ...nextTagsMap };
+
+          // Merge demo notes
+          if (DEMO_NOTES_BY_TRACK) {
+            Object.keys(DEMO_NOTES_BY_TRACK).forEach((trackId) => {
+              const demoNotes = DEMO_NOTES_BY_TRACK[trackId];
+              if (Array.isArray(demoNotes) && demoNotes.length > 0) {
+                const existingNotes = nextNotesMap[trackId] || [];
+                nextNotesMap[trackId] = [...existingNotes, ...demoNotes];
+              }
+            });
+          }
+
+          // Merge demo tags
+          if (DEMO_TAGS_BY_TRACK) {
+            Object.keys(DEMO_TAGS_BY_TRACK).forEach((trackId) => {
+              const demoTags = DEMO_TAGS_BY_TRACK[trackId];
+              if (Array.isArray(demoTags) && demoTags.length > 0) {
+                const existingTags = nextTagsMap[trackId] || [];
+                // Deduplicate tags
+                const combinedTags = [...existingTags, ...demoTags];
+                nextTagsMap[trackId] = [...new Set(combinedTags)];
+              }
+            });
+          }
+        }
 
         dispatch(
           playlistActions.setTracksWithNotes(
@@ -414,6 +469,7 @@ export default function usePlaylistImportController({
             nextTagsMap,
             samePlaylist ? previousTracks : [],
             importedTimestamp ?? null,
+            meta?.provider,
           ),
         );
         markTrackFocusContext('initial-import');
@@ -643,12 +699,19 @@ export default function usePlaylistImportController({
     },
     [applyImportResult, getCachedResult],
   );
-  const handleImportSubmit = useCallback(
-    async (event) => {
-      event?.preventDefault?.();
+  /**
+   * Internal import handler - shared logic for both user imports and demo playlist.
+   * @param {string} url - The playlist URL to import
+   * @param {{ source: 'import' | 'demo', providerHint?: string | null }} options
+   */
+  const handleImportInternal = useCallback(
+    async (url, options = {}) => {
+      const { source = 'import', providerHint = null } = options;
+      const isDemoSource = source === 'demo';
+
       setImportError(null);
       cancelBackgroundPagination({ resetHistory: true });
-      const trimmedUrl = importUrl.trim();
+      const trimmedUrl = url.trim();
 
       if (!trimmedUrl) {
         const msg = 'Paste a playlist URL to import.';
@@ -659,7 +722,12 @@ export default function usePlaylistImportController({
         return;
       }
 
-      if (!providerChip) {
+      // For demo imports, detect provider from URL; for user imports, use existing providerChip
+      const effectiveProviderHint = isDemoSource
+        ? detectProvider(trimmedUrl)
+        : (providerHint ?? providerChip);
+
+      if (!effectiveProviderHint) {
         const msg = msgFromCode(CODES.ERR_UNSUPPORTED_URL);
         setImportError({ message: msg, type: 'error' });
         announce('Import failed. Unsupported URL.');
@@ -668,7 +736,7 @@ export default function usePlaylistImportController({
         return;
       }
 
-      announce('Import started.');
+      announce(isDemoSource ? 'Loading demo playlist...' : 'Import started.');
       const cachedEntry = hydrateFromCache(trimmedUrl);
       const hydratedFromCache = Boolean(cachedEntry);
       if (hydratedFromCache) {
@@ -676,7 +744,7 @@ export default function usePlaylistImportController({
       }
       try {
         const result = await importInitial(trimmedUrl, {
-          providerHint: providerChip,
+          providerHint: effectiveProviderHint,
           sourceUrl: trimmedUrl,
         });
 
@@ -685,8 +753,8 @@ export default function usePlaylistImportController({
         if (!result.ok) {
           const code = result.code ?? CODES.ERR_UNKNOWN;
           let msg = msgFromCode(code);
-          console.log('[import error]', { code, raw: result.error });
-          
+          console.log('[import error]', { code, raw: result.error, source });
+
           const type = code === CODES.ERR_RATE_LIMITED ? 'rateLimit' : 'error';
           if (type === 'rateLimit') {
             msg = formatRateLimitMessage(result.retryAt);
@@ -699,7 +767,7 @@ export default function usePlaylistImportController({
 
         applyImportResult(result.data, {
           sourceUrl: trimmedUrl,
-          recents: {
+          recents: isDemoSource ? undefined : {
             importedAt: result.data?.importedAt ?? null,
             total:
               typeof result.data?.total === 'number'
@@ -720,8 +788,8 @@ export default function usePlaylistImportController({
         }
         const code = extractErrorCode(err);
         let msg = msgFromCode(code);
-        console.log('[import error]', { code, raw: err });
-        
+        console.log('[import error]', { code, raw: err, source });
+
         const type = code === CODES.ERR_RATE_LIMITED ? 'rateLimit' : 'error';
         if (type === 'rateLimit') {
           msg = formatRateLimitMessage(err?.retryAt);
@@ -742,11 +810,25 @@ export default function usePlaylistImportController({
       hydrateFromCache,
       focusImportInput,
       importInitial,
-      importUrl,
       setIsRefreshingCachedData,
       msgFromCode,
       providerChip,
     ],
+  );
+
+  const handleImportSubmit = useCallback(
+    async (event) => {
+      event?.preventDefault?.();
+      await handleImportInternal(importUrl, { source: 'import' });
+    },
+    [handleImportInternal, importUrl],
+  );
+
+  const handleImportDemo = useCallback(
+    async () => {
+      await handleImportInternal(DEMO_PLAYLIST_URL, { source: 'demo' });
+    },
+    [handleImportInternal],
   );
   useEffect(() => {
     if (hasPrimedUpstreamRef.current) return;
@@ -1232,6 +1314,7 @@ export default function usePlaylistImportController({
               nextTagsMap,
               baseTracks,
               loadMoreStamp,
+              importMeta?.provider,
             ),
           );
           markTrackFocusContext(isBackground ? 'background-load-more' : 'manual-load-more');
@@ -1352,6 +1435,7 @@ export default function usePlaylistImportController({
       tracks,
       tracksRef,
       lastImportUrlRef,
+      importMeta?.provider,
     ],
   );
   const startBackgroundPagination = useCallback(
@@ -1465,6 +1549,7 @@ export default function usePlaylistImportController({
     showReimportSpinner,
     showLoadMoreSpinner,
     handleImport: handleImportSubmit,
+    handleImportDemo,
     handleSelectRecent,
     handleReimport,
     handleLoadMore,

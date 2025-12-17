@@ -368,6 +368,10 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
   const syncTrackTags = useCallback(
     (trackId, tags) => {
       if (!trackId) return Promise.resolve()
+      // GUARD: Skip sync for demo playlists (read-only)
+      if (state.provider === 'demo') {
+        return Promise.resolve()
+      }
       upsertPendingTagUpdate(trackId, tags)
       const scheduler = tagSyncSchedulerRef.current
       if (scheduler) {
@@ -375,7 +379,7 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
       }
       return sendTagUpdate(trackId, tags)
     },
-    [sendTagUpdate, upsertPendingTagUpdate],
+    [state.provider, sendTagUpdate, upsertPendingTagUpdate],
   )
 
   // Memoize context value to prevent unnecessary re-renders

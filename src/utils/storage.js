@@ -19,7 +19,7 @@ import { normalizeNotesList } from './notesTagsData.js'
  * @typedef {'timestamp'} DiscoverableFeature
  *
  * @typedef {Object} ImportMeta
- * @property {'spotify' | 'youtube' | 'soundcloud' | null} [provider]
+ * @property {'spotify' | 'youtube' | 'soundcloud' | 'demo' | null} [provider]
  * @property {string | null} [playlistId]
  * @property {string | null} [snapshotId]
  * @property {string | null} [cursor]
@@ -42,7 +42,7 @@ import { normalizeNotesList } from './notesTagsData.js'
  * @property {string=} dateAdded
  * @property {string=} importedAt
  * @property {number=} originalIndex
- * @property {'spotify' | 'youtube' | 'soundcloud'=} provider
+ * @property {'spotify' | 'youtube' | 'soundcloud' | 'demo'=} provider
  * @property {'music' | 'podcast'=} kind
  * @property {string=} showId
  * @property {string=} showName
@@ -55,7 +55,7 @@ import { normalizeNotesList } from './notesTagsData.js'
  *
  * @typedef {Object} RecentPlaylist
  * @property {string} id // `${provider}:${playlistId}`
- * @property {'spotify' | 'youtube' | 'soundcloud'} provider
+ * @property {'spotify' | 'youtube' | 'soundcloud' | 'demo'} provider
  * @property {string} playlistId
  * @property {string} title
  * @property {string} sourceUrl
@@ -85,7 +85,7 @@ const LS_KEY = 'sta:v6';
 const LEGACY_KEYS = ['sta:v5', 'sta:v4', 'sta:v3', 'sta:v2'];
 const PENDING_MIGRATION_KEY = 'sta:v6:pending-migration';
 const AUTO_BACKUP_KEY = 'sta:v6:auto-backup';
-const VALID_PROVIDERS = new Set(['spotify', 'youtube', 'soundcloud']);
+const VALID_PROVIDERS = new Set(['spotify', 'youtube', 'soundcloud', 'demo']);
 const RECENT_FALLBACK_TITLE = 'Untitled playlist';
 const RECENT_DEFAULT_MAX = 8;
 const FONT_PREF_DEFAULT = 'default';

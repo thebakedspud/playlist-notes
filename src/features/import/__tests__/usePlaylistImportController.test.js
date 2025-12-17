@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import usePlaylistImportController from '../usePlaylistImportController.js';
 import { CODES } from '../adapters/types.js';
 import { playlistActions } from '../../playlist/actions.js';
+import { DEMO_PLAYLIST_URL } from '../../../data/demoPlaylist.js';
 
 const detectProviderMock = vi.hoisted(() => vi.fn(() => 'spotify'));
 const importFlowState = vi.hoisted(() => ({ status: 'idle', loading: false }));
@@ -1066,5 +1067,99 @@ describe('usePlaylistImportController', () => {
       result.current.setImportError(null);
     });
     expect(result.current.importError).toBeNull();
+  });
+
+  it('handles demo playlist import without relying on importUrl state', async () => {
+    const deps = createDeps();
+    const demoData = {
+      tracks: [
+        { id: 'track-1', notes: [], tags: [] },
+        { id: 'track-2', notes: [], tags: [] },
+      ],
+      meta: {
+        hasMore: false,
+        provider: 'spotify',
+        playlistId: '3sX5G9KAfZG0DRQnCfIxd8',
+        snapshotId: 'demo-snap-1',
+        total: 2,
+      },
+      importedAt: '2024-01-01T00:00:00.000Z',
+      title: 'Notable Samples',
+      coverUrl: 'https://demo-cover.jpg',
+      total: 2,
+    };
+    importInitialMock.mockResolvedValue({ ok: true, data: demoData });
+
+    const { result } = renderHook(() => usePlaylistImportController(deps));
+
+    // CRITICAL: Do NOT set importUrl state before calling handleImportDemo
+    // This verifies the fix for the race condition bug
+    expect(result.current.importUrl).toBe('');
+
+    await act(async () => {
+      await result.current.handleImportDemo();
+    });
+
+    // Verify importInitialMock was called with demo URL and correct provider hint
+    await waitFor(() => {
+      expect(importInitialMock).toHaveBeenCalledWith(
+        DEMO_PLAYLIST_URL,
+        expect.objectContaining({
+          providerHint: 'spotify',
+          sourceUrl: DEMO_PLAYLIST_URL,
+        }),
+      );
+    });
+
+    // Verify the import succeeded with a single call (no retry needed)
+    expect(importInitialMock).toHaveBeenCalledTimes(1);
+
+    // Verify announcement used demo-specific message
+    expect(deps.announce).toHaveBeenCalledWith('Loading demo playlist...');
+
+    // Verify dispatch was called to update playlist state
+    await waitFor(() => {
+      const actionType = playlistActions.setTracksWithNotes([], {}, {}).type;
+      expect(deps.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: actionType }));
+    });
+
+    // Verify screen switched to playlist view
+    expect(deps.setScreen).toHaveBeenCalledWith('playlist');
+    expect(deps.setPlaylistTitle).toHaveBeenCalledWith('Notable Samples');
+    expect(deps.setImportedAt).toHaveBeenCalledWith(demoData.importedAt);
+
+    // Verify demo playlist was NOT added to recents (recents should be undefined for demo)
+    // The demo source should skip the recents update
+    expect(deps.pushRecentPlaylist).not.toHaveBeenCalled();
+
+    // Verify success announcement
+    expect(deps.announce).toHaveBeenCalledWith('Playlist imported. 2 tracks.');
+
+    // Verify importUrl state was never modified
+    expect(result.current.importUrl).toBe('');
+  });
+
+  it('surfaces errors when demo import fails', async () => {
+    const deps = createDeps();
+    importInitialMock.mockResolvedValue({
+      ok: false,
+      code: CODES.ERR_UNKNOWN,
+      error: new Error('demo import failed'),
+    });
+
+    const { result } = renderHook(() => usePlaylistImportController(deps));
+
+    await act(async () => {
+      await result.current.handleImportDemo();
+    });
+
+    // Demo import should set a generic error with type 'error'
+    expect(result.current.importError).toEqual({
+      message: expect.any(String),
+      type: 'error',
+    });
+
+    // Announcement should clearly indicate failure
+    expect(deps.announce).toHaveBeenCalledWith(expect.stringContaining('Import failed.'));
   });
 });

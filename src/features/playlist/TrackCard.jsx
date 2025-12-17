@@ -41,6 +41,7 @@ const TIMESTAMP_HINT_TEXT = 'Tip: Type “:30” or “1:05” to timestamp a mo
  * @property {(tag: string) => void} [onFilterTag]
  * @property {import('react').CSSProperties} [style]
  * @property {boolean} hasDiscoveredTimestamp
+ * @property {boolean} [readOnly] - When true, disables note/tag editing (demo mode)
  */
 
 /**
@@ -102,6 +103,7 @@ const TrackCardComponent = forwardRef(function TrackCard(
     onFilterTag,
     style,
     hasDiscoveredTimestamp,
+    readOnly = false,
   },
   /** @type {import('react').ForwardedRef<HTMLLIElement>} */ ref,
 ) {
@@ -393,18 +395,20 @@ const TrackCardComponent = forwardRef(function TrackCard(
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            id={`add-note-btn-${track.id}`}
-            className="btn"
-            aria-label="Add note"
-            aria-describedby={`title-${track.id}`}
-            onClick={() => onAddNote(track.id)}
-          >
-            Add note
-          </button>
-        </div>
+        {!readOnly && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              id={`add-note-btn-${track.id}`}
+              className="btn"
+              aria-label="Add note"
+              aria-describedby={`title-${track.id}`}
+              onClick={() => onAddNote(track.id)}
+            >
+              Add note
+            </button>
+          </div>
+        )}
       </div>
 
       {dateAdded && (
@@ -425,33 +429,35 @@ const TrackCardComponent = forwardRef(function TrackCard(
             ref={registerChipRef(tag)}
             tag={tag}
             onFilter={handleFilterTag}
-            onRemove={() => removeTag(tag, tagIndex)}
-            onKeyDown={(event) => handleChipKeyDown(event, tagIndex)}
+            onRemove={readOnly ? undefined : () => removeTag(tag, tagIndex)}
+            onKeyDown={readOnly ? undefined : (event) => handleChipKeyDown(event, tagIndex)}
           />
         ))}
 
-        {addingTag ? (
-          <TagInput
-            ref={tagInputRef}
-            stockTags={stockTags}
-            customTags={customTags}
-            existingTags={tags}
-            onAdd={submitTag}
-            onCancel={cancelAddTag}
-            autoFocus
-            aria-invalid={tagError ? 'true' : undefined}
-            aria-describedby={tagError ? tagErrorId : undefined}
-          />
-        ) : (
-          <button
-            type="button"
-            ref={addTagBtnRef}
-            className="tag-chip tag-chip--add"
-            onClick={startAddTag}
-            onKeyDown={handleAddButtonKeyDown}
-          >
-            + Add tag
-          </button>
+        {!readOnly && (
+          addingTag ? (
+            <TagInput
+              ref={tagInputRef}
+              stockTags={stockTags}
+              customTags={customTags}
+              existingTags={tags}
+              onAdd={submitTag}
+              onCancel={cancelAddTag}
+              autoFocus
+              aria-invalid={tagError ? 'true' : undefined}
+              aria-describedby={tagError ? tagErrorId : undefined}
+            />
+          ) : (
+            <button
+              type="button"
+              ref={addTagBtnRef}
+              className="tag-chip tag-chip--add"
+              onClick={startAddTag}
+              onKeyDown={handleAddButtonKeyDown}
+            >
+              + Add tag
+            </button>
+          )
         )}
       </div>
       <ErrorMessage id={tagErrorId} className="tag-row__error">
@@ -467,9 +473,10 @@ const TrackCardComponent = forwardRef(function TrackCard(
         onDeleteNote={(noteIndex) => onDeleteNote(track.id, noteIndex)}
         onUndo={onUndo}
         onDismissUndo={onDismissUndo}
+        readOnly={readOnly}
       />
 
-      {isEditing && (
+      {isEditing && !readOnly && (
         <section id={`note-${track.id}`} aria-labelledby={`t-${track.id}`} style={{ marginTop: 10 }}>
           <label className="sr-only" htmlFor={`note-input-${track.id}`}>
             Note text

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LandingScreen from '../LandingScreen.jsx'
 
@@ -65,5 +65,36 @@ describe('LandingScreen', () => {
     it('does not render recent playlists section when list is empty', () => {
         render(<LandingScreen {...createDefaultProps()} />)
         expect(screen.queryByText('Previously imported')).not.toBeInTheDocument()
+    })
+
+    it('renders demo helper only when helper is enabled and handler is provided', () => {
+        const helperHeading = /no playlist link\? try our demo/i
+
+        // Default props: helper should be hidden
+        render(<LandingScreen {...createDefaultProps()} />)
+        expect(screen.queryByRole('heading', { name: helperHeading })).toBeNull()
+
+        // showDemoHelper without onLoadDemo: still hidden
+        render(<LandingScreen {...{ ...createDefaultProps(), showDemoHelper: true }} />)
+        expect(screen.queryByRole('heading', { name: helperHeading })).toBeNull()
+
+        // Both showDemoHelper and onLoadDemo: helper is visible
+        const onLoadDemo = vi.fn()
+        render(<LandingScreen {...{ ...createDefaultProps(), showDemoHelper: true, onLoadDemo }} />)
+        expect(screen.getByRole('heading', { name: helperHeading })).toBeInTheDocument()
+    })
+
+    it('calls onLoadDemo when helper is clicked without submitting the form', () => {
+        const helperLabel = /load demo playlist with timestamped notes/i
+        const onLoadDemo = vi.fn()
+        const onImport = vi.fn()
+
+        render(<LandingScreen {...{ ...createDefaultProps(), showDemoHelper: true, onLoadDemo, onImport }} />)
+
+        const helperButton = screen.getByRole('button', { name: helperLabel })
+        fireEvent.click(helperButton)
+
+        expect(onLoadDemo).toHaveBeenCalledTimes(1)
+        expect(onImport).not.toHaveBeenCalled()
     })
 })

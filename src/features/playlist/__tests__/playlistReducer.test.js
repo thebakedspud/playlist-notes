@@ -15,6 +15,7 @@ describe('playlistReducer', () => {
       expect(initialPlaylistState).toEqual({
         tracks: [],
         notesByTrack: {},
+        provider: null,
         tagsByTrack: {},
         editingState: {
           trackId: null,

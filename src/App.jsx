@@ -53,6 +53,14 @@ import usePlaylistImportController from './features/import/usePlaylistImportCont
 import { apiFetch } from './lib/apiClient.js'
 import { getDeviceId, getAnonId } from './lib/deviceState.js'
 
+// Demo playlist configuration
+import {
+  DEMO_PLAYLIST_ID,
+  DEMO_NOTES_BY_TRACK,
+  DEMO_TAGS_BY_TRACK,
+  markDemoViewed,
+} from './data/demoPlaylist.js'
+
 // NEW: Playlist state reducer + context provider
 import { playlistActions } from './features/playlist/actions.js'
 import { validateTag, isPodcastTrack } from './features/playlist/helpers.js'
@@ -133,13 +141,6 @@ function AppInner({
   const tagsByTrack = usePlaylistTagsByTrack()
   const { hasLocalNotes, allCustomTags } = usePlaylistDerived()
   const { syncTrackTags } = usePlaylistSync()
-  const noteCountForRecovery = useMemo(() => {
-    if (!notesByTrack) return 0
-    return Object.values(notesByTrack).reduce((count, notes) => {
-      if (!Array.isArray(notes)) return count
-      return count + notes.length
-    }, 0)
-  }, [notesByTrack])
   const tracksRef = useRef(tracks)
   const [skipPlaylistFocusManagement, setSkipPlaylistFocusManagement] = useState(false)
   const firstVisibleTrackIdRef = useRef(null)
@@ -188,6 +189,7 @@ function AppInner({
     showReimportSpinner,
     showLoadMoreSpinner,
     handleImport,
+    handleImportDemo,
     handleSelectRecent: handleSelectRecentInternal,
     handleReimport,
     handleLoadMore,
@@ -223,6 +225,34 @@ function AppInner({
     initialImportMeta,
     initialPersistedTrackCount: Array.isArray(persistedTracks) ? persistedTracks.length : 0,
   })
+
+  // Derive isDemoPlaylist from provider (no separate state needed)
+  const isDemoPlaylist = importMeta.provider === 'demo'
+
+  // Calculate note count for recovery threshold (exclude demo playlists)
+  const noteCountForRecovery = useMemo(() => {
+    // Don't count notes from demo playlists for recovery threshold
+    if (importMeta.provider === 'demo') return 0
+    if (!notesByTrack) return 0
+    return Object.values(notesByTrack).reduce((count, notes) => {
+      if (!Array.isArray(notes)) return count
+      return count + notes.length
+    }, 0)
+  }, [notesByTrack, importMeta.provider])
+
+  // Derive hasImportedPlaylist: true if any non-demo playlists exist in recents
+  const hasImportedPlaylist = useMemo(() => {
+    if (!Array.isArray(recentPlaylists) || recentPlaylists.length === 0) {
+      return false
+    }
+    // Check if any recent playlist is NOT a demo playlist
+    return recentPlaylists.some(
+      (recent) => recent?.provider !== 'demo'
+    )
+  }, [recentPlaylists])
+
+  // Show demo helper on landing when user has no imported playlists
+  const showDemoHelper = !hasImportedPlaylist
 
   const isRefreshingCachedDataRef = useRef(isRefreshingCachedData)
   useEffect(() => {
@@ -711,13 +741,14 @@ function AppInner({
       const nextMap = ensureNotesEntries(merged, tracks)
       const nextTagsMap = ensureTagsEntries(mergedTags, tracks)
 
-      // Update via reducer
+      // Update via reducer (preserve existing provider)
       dispatch(playlistActions.setTracksWithNotes(
         tracks,
         nextMap,
         nextTagsMap,
         tracks,
-        null
+        null,
+        importMeta.provider
       ))
       announce('Notes restored from backup.')
     } catch (err) {
@@ -754,6 +785,36 @@ function AppInner({
     announce("All saved data cleared. You're back at the start.")
     setTimeout(() => importInputRef.current?.focus(), 0)
   }
+
+  /**
+   * Load the demo playlist - imports a live Spotify playlist
+   * then overrides provider to 'demo' for read-only mode.
+   */
+  const handleLoadDemo = useCallback(() => {
+    // Track for analytics
+    markDemoViewed()
+
+    // Use dedicated demo import handler
+    handleImportDemo()
+  }, [handleImportDemo])
+
+  /**
+   * Exit demo mode - returns to landing screen for user to import their own playlist
+   */
+  const handleExitDemo = useCallback(() => {
+    // Reset playlist state (demo status is derived from importMeta.provider)
+    dispatch(playlistActions.resetState())
+    setImportMeta({ ...EMPTY_IMPORT_META })
+    setPlaylistTitle('My Playlist')
+    setImportedAt(null)
+    setLastImportUrl('')
+
+    goToLanding()
+    announce('Ready to import your own playlist.')
+
+    // Focus the import input
+    setTimeout(() => importInputRef.current?.focus(), 0)
+  }, [dispatch, setImportMeta, setPlaylistTitle, setImportedAt, setLastImportUrl, goToLanding, announce])
 
   // sendTagUpdate, tag sync scheduler, and syncTrackTags moved to PlaylistProvider
 
@@ -912,6 +973,8 @@ function AppInner({
         focusContext={trackFocusContext}
         onFirstVisibleTrackChange={handleFirstVisibleTrackChange}
         viewMode={viewMode === 'podcast' ? 'podcast' : 'playlist'}
+        isDemoPlaylist={isDemoPlaylist}
+        onExitDemo={handleExitDemo}
       />
     )
   }
@@ -1046,6 +1109,8 @@ function AppInner({
                   onSelectRecent={handleSelectRecent}
                   refreshingRecentId={refreshingRecentId}
                   isRefreshingCachedData={isRefreshingCachedData}
+                  showDemoHelper={showDemoHelper}
+                  onLoadDemo={handleLoadDemo}
                 />
               )}
 

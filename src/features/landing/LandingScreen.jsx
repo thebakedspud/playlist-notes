@@ -1,5 +1,6 @@
 // src/features/landing/LandingScreen.jsx
 import ErrorMessage from '../../components/ErrorMessage.jsx'
+import DemoCard from '../../components/DemoCard.jsx'
 import RecentPlaylists from '../recent/RecentPlaylists.jsx'
 
 /**
@@ -17,6 +18,8 @@ import RecentPlaylists from '../recent/RecentPlaylists.jsx'
  * @property {(item: any) => Promise<any>} onSelectRecent - Handler for selecting a recent playlist
  * @property {string | null} refreshingRecentId - ID of playlist currently refreshing
  * @property {boolean} isRefreshingCachedData - Whether cached data refresh is in progress
+ * @property {boolean} [showDemoHelper] - Whether to show the demo playlist helper
+ * @property {() => void} [onLoadDemo] - Handler for loading the demo playlist
  */
 
 /**
@@ -37,6 +40,8 @@ export default function LandingScreen({
     onSelectRecent,
     refreshingRecentId,
     isRefreshingCachedData,
+    showDemoHelper = false,
+    onLoadDemo,
 }) {
     return (
         <section aria-labelledby="landing-title">
@@ -95,6 +100,10 @@ export default function LandingScreen({
                     </div>
                 </form>
             </div>
+
+            {showDemoHelper && onLoadDemo && (
+                <DemoCard onLoadDemo={onLoadDemo} disabled={isAnyImportBusy} />
+            )}
 
             <RecentPlaylists
                 items={recentPlaylists}

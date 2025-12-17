@@ -166,12 +166,13 @@ export const playlistActions = {
    * @param {Record<string, string[]>} tagsByTrack
    * @param {Array} baselineTracks - For comparison during merge
    * @param {string|null} importStamp - Timestamp for import
+   * @param {'spotify' | 'youtube' | 'soundcloud' | 'demo' | null} provider - Playlist provider
    * @returns {Object}
    */
-  setTracksWithNotes(tracks, notesByTrack, tagsByTrack, baselineTracks = [], importStamp = null) {
+  setTracksWithNotes(tracks, notesByTrack, tagsByTrack, baselineTracks = [], importStamp = null, provider = null) {
     return {
       type: 'TRACKS_SET_WITH_NOTES',
-      payload: { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp }
+      payload: { tracks, notesByTrack, tagsByTrack, baselineTracks, importStamp, provider }
     }
   },
 

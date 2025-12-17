@@ -12,6 +12,7 @@ import { formatNoteCreatedAt, formatTimestampMs, formatTimestampRange } from './
  * @param {(noteIndex: number) => void} props.onDeleteNote
  * @param {(pendingId: string) => void} props.onUndo
  * @param {(pendingId: string) => void} props.onDismissUndo
+ * @param {boolean} [props.readOnly] - When true, hides delete buttons (demo mode)
  */
 export default function NoteList({
   trackId,
@@ -22,6 +23,7 @@ export default function NoteList({
   onDeleteNote,
   onUndo,
   onDismissUndo,
+  readOnly = false,
 }) {
   const hasNotes = notes.length > 0
   const hasPlaceholders = placeholders.some(ph => isPending(ph.pid))
@@ -117,15 +119,17 @@ export default function NoteList({
               </span>
             )}
           </div>
-          <button
-            type="button"
-            id={`del-btn-${trackId}-${idx}`}
-            className="btn"
-            aria-label={`Delete note ${idx + 1} for ${trackTitle}`}
-            onClick={() => onDeleteNote(idx)}
-          >
-            Delete
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              id={`del-btn-${trackId}-${idx}`}
+              className="btn"
+              aria-label={`Delete note ${idx + 1} for ${trackTitle}`}
+              onClick={() => onDeleteNote(idx)}
+            >
+              Delete
+            </button>
+          )}
         </li>
       )
     }
