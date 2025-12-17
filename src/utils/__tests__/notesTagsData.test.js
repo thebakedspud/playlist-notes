@@ -86,6 +86,26 @@ describe('notesTagsData utilities', () => {
       const merged = mergeRemoteTags(local, remote)
       expect(merged.t1).toEqual(['metal', 'rock'])
     })
+
+    it('normalizes remote tags to lowercase when merging with local tags', () => {
+      const local = { t1: ['indie'] }
+      const remote = { t1: ['METAL', 'Rock'] }
+
+      const merged = mergeRemoteTags(local, remote)
+      // All tags should be lowercase and sorted
+      expect(merged.t1).toEqual(['indie', 'metal', 'rock'])
+      // Verify no mixed-case tags exist
+      expect(merged.t1.every(tag => tag === tag.toLowerCase())).toBe(true)
+    })
+
+    it('deduplicates remote tag "METAL" with local tag "metal"', () => {
+      const local = { t1: ['metal'] }
+      const remote = { t1: ['METAL', 'rock'] }
+
+      const merged = mergeRemoteTags(local, remote)
+      // Should have 2 tags, not 3 (METAL and metal should deduplicate)
+      expect(merged.t1).toEqual(['metal', 'rock'])
+    })
   })
 
   describe('groupRemoteNotes', () => {

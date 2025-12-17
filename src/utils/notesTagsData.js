@@ -529,7 +529,7 @@ export function mergeRemoteTags(localMap, remoteMap) {
         const normalized = tag.toLowerCase();
         if (!seen.has(normalized)) {
           seen.add(normalized);
-          combined.push(tag);
+          combined.push(normalized);
         }
       });
       

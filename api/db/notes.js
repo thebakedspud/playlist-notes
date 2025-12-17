@@ -293,7 +293,11 @@ export default async function handler(req, res) {
         .eq('track_id', trackId)
         .maybeSingle();
 
-      if (existingError) {
+      // PGRST116 means multiple rows exist (append-only model allows this)
+      // In this case, create a new empty-body row for tags
+      const multipleRowsExist = existingError?.code === 'PGRST116';
+
+      if (existingError && !multipleRowsExist) {
         console.error('[notes:post] lookup error', existingError);
         return res.status(500).json({
           error: 'Failed to look up existing note',
@@ -301,7 +305,7 @@ export default async function handler(req, res) {
         });
       }
 
-      if (!existingRow) {
+      if (!existingRow || multipleRowsExist) {
         const insertPayload = {
           anon_id: anonContext.anonId,
           device_id: deviceId,
@@ -390,9 +394,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      const noteId = getTrackIdFromRequest(req)?.replace('noteId=', '') ||
-        (typeof req.query?.noteId === 'string' ? req.query.noteId : null);
-      
+      // Extract noteId from query parameter (not trackId)
+      const noteId = typeof req.query?.noteId === 'string' ? req.query.noteId : null;
+
       if (!noteId) {
         return res.status(400).json({ error: 'Missing noteId parameter' });
       }

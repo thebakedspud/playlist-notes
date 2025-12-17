@@ -613,7 +613,7 @@ describe('Scenario 4: Undo after delete (queue cleanup)', () => {
     }
   })
 
-  it('full delete-undo flow: queue is cleared, note restored', () => {
+  it('full delete-undo flow: queue is cleared, note restored', async () => {
     const noteToDelete = makeNote('Oops deleted', 1000, { id: 'undo-me' })
     const notes = [noteToDelete, makeNote('Other note', 2000, { id: 'keep-me' })]
 
@@ -643,7 +643,7 @@ describe('Scenario 4: Undo after delete (queue cleanup)', () => {
 
     // Step 3: Verify queue flush sends nothing
     const mockApiFetch = vi.fn()
-    flushDeleteQueue(mockApiFetch)
+    await flushDeleteQueue(mockApiFetch)
     expect(mockApiFetch).not.toHaveBeenCalled()
   })
 })
