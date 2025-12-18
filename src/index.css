@@ -17,6 +17,7 @@
 /* Make body use the theme colors */
 body {
   margin: 0;
+  overflow-x: hidden; /* Prevent horizontal scroll from focus outlines on iOS */
   font-family: var(--font-body, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
   background: var(--bg);
   color: var(--fg);
