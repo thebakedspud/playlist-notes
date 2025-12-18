@@ -432,31 +432,28 @@ export default function usePlaylistImportController({
         let nextNotesMap = ensureNotesEntries(notesByTrack, mapped);
         let nextTagsMap = ensureTagsEntries(tagsByTrack, mapped);
 
-        // Merge demo notes and tags if this is a demo playlist
+        // Set demo notes and tags if this is a demo playlist
+        // Replace (don't append) to prevent duplication on reimport/refresh
         if (isDemo) {
           nextNotesMap = { ...nextNotesMap };
           nextTagsMap = { ...nextTagsMap };
 
-          // Merge demo notes
+          // Set demo notes (replace, don't merge)
           if (DEMO_NOTES_BY_TRACK) {
             Object.keys(DEMO_NOTES_BY_TRACK).forEach((trackId) => {
               const demoNotes = DEMO_NOTES_BY_TRACK[trackId];
               if (Array.isArray(demoNotes) && demoNotes.length > 0) {
-                const existingNotes = nextNotesMap[trackId] || [];
-                nextNotesMap[trackId] = [...existingNotes, ...demoNotes];
+                nextNotesMap[trackId] = demoNotes;
               }
             });
           }
 
-          // Merge demo tags
+          // Set demo tags (replace, don't merge)
           if (DEMO_TAGS_BY_TRACK) {
             Object.keys(DEMO_TAGS_BY_TRACK).forEach((trackId) => {
               const demoTags = DEMO_TAGS_BY_TRACK[trackId];
               if (Array.isArray(demoTags) && demoTags.length > 0) {
-                const existingTags = nextTagsMap[trackId] || [];
-                // Deduplicate tags
-                const combinedTags = [...existingTags, ...demoTags];
-                nextTagsMap[trackId] = [...new Set(combinedTags)];
+                nextTagsMap[trackId] = demoTags;
               }
             });
           }

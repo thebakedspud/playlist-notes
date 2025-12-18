@@ -1162,4 +1162,81 @@ describe('usePlaylistImportController', () => {
     // Announcement should clearly indicate failure
     expect(deps.announce).toHaveBeenCalledWith(expect.stringContaining('Import failed.'));
   });
+
+  it('does not duplicate demo notes and tags on reimport or refresh', async () => {
+    const deps = createDeps();
+
+    // Mock the demo playlist data with specific tracks that have demo notes
+    const demoTrackId = '20VuO95A8RxUPlShnfYArW'; // Track from DEMO_NOTES_BY_TRACK
+    const demoData = {
+      tracks: [
+        { id: demoTrackId, title: 'I Got The...', artist: 'Labi Siffre', notes: [], tags: [] },
+      ],
+      meta: {
+        hasMore: false,
+        provider: 'spotify',
+        playlistId: '3sX5G9KAfZG0DRQnCfIxd8',
+        snapshotId: 'demo-snap-1',
+        total: 1,
+      },
+      importedAt: '2024-01-01T00:00:00.000Z',
+      title: 'Notable Samples',
+      coverUrl: 'https://demo-cover.jpg',
+      total: 1,
+    };
+    importInitialMock.mockResolvedValue({ ok: true, data: demoData });
+
+    const { result } = renderHook(() => usePlaylistImportController(deps));
+
+    // First import: demo notes should be applied
+    await act(async () => {
+      await result.current.handleImportDemo();
+    });
+
+    await waitFor(() => {
+      expect(deps.dispatch).toHaveBeenCalled();
+    });
+
+    // Capture the first dispatch call to check the notes
+    const firstDispatchCall = deps.dispatch.mock.calls.find(
+      (call) => call[0].type === playlistActions.setTracksWithNotes([], {}, {}).type
+    );
+    expect(firstDispatchCall).toBeDefined();
+    const firstNotesMap = firstDispatchCall[0].payload.notesByTrack;
+    const firstNoteCount = firstNotesMap[demoTrackId]?.length || 0;
+
+    // Demo notes for this track should be present (2 notes)
+    expect(firstNoteCount).toBe(2);
+
+    // Clear mocks for second import
+    deps.dispatch.mockClear();
+    importInitialMock.mockResolvedValue({ ok: true, data: demoData });
+
+    // Second import: simulate a reimport/refresh
+    await act(async () => {
+      await result.current.handleImportDemo();
+    });
+
+    await waitFor(() => {
+      expect(deps.dispatch).toHaveBeenCalled();
+    });
+
+    // Capture the second dispatch call
+    const secondDispatchCall = deps.dispatch.mock.calls.find(
+      (call) => call[0].type === playlistActions.setTracksWithNotes([], {}, {}).type
+    );
+    expect(secondDispatchCall).toBeDefined();
+    const secondNotesMap = secondDispatchCall[0].payload.notesByTrack;
+    const secondNoteCount = secondNotesMap[demoTrackId]?.length || 0;
+
+    // CRITICAL: Note count should remain the same (2), not doubled (4)
+    expect(secondNoteCount).toBe(2);
+    expect(secondNoteCount).toBe(firstNoteCount);
+
+    // Verify the actual note IDs haven't changed or duplicated
+    const firstNoteIds = firstNotesMap[demoTrackId]?.map(n => n.id) || [];
+    const secondNoteIds = secondNotesMap[demoTrackId]?.map(n => n.id) || [];
+    expect(secondNoteIds).toEqual(firstNoteIds);
+    expect(new Set(secondNoteIds).size).toBe(secondNoteIds.length); // No duplicate IDs
+  });
 });
