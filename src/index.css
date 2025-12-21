@@ -15,6 +15,10 @@
 }
 
 /* Make body use the theme colors */
+html {
+  overflow-x: hidden; /* Prevent horizontal scroll - applied to html for iOS Safari */
+}
+
 body {
   margin: 0;
   overflow-x: hidden; /* Prevent horizontal scroll from focus outlines on iOS */
