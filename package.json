@@ -22,7 +22,7 @@
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "prop-types": "^15.8.1",
-    "react": "^19.2.0",
+    "react": "^19.2.3",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
@@ -35,7 +35,7 @@
     "@types/node": "^24.10.1",
     "@types/prop-types": "^15.7.15",
     "@types/punycode": "^2.1.4",
-    "@types/react": "^19.2.2",
+    "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
     "@vitest/coverage-v8": "^4.0.8",
