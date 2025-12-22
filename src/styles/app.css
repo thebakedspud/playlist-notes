@@ -536,6 +536,8 @@
   padding: var(--space-3);
   margin-top: var(--space-2);
   margin-bottom: var(--space-3);
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .import-url-input {
