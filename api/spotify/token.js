@@ -1,8 +1,6 @@
 // api/spotify/token.js
 // Vercel serverless function that exchanges client credentials for a Spotify access token.
 
-/* eslint-env node */
-
 /**
  * @typedef {import('http').IncomingMessage & { method?: string }} VercelRequest
  * @typedef {import('http').ServerResponse} VercelResponse
