@@ -59,7 +59,6 @@ import {
   DEMO_NOTES_BY_TRACK,
   DEMO_TAGS_BY_TRACK,
   markDemoViewed,
-  hasDemoBeenViewed,
 } from './data/demoPlaylist.js'
 
 // NEW: Playlist state reducer + context provider
@@ -252,8 +251,8 @@ function AppInner({
     )
   }, [recentPlaylists])
 
-  // Show demo helper on landing when user has no imported playlists AND hasn't viewed demo yet
-  const showDemoHelper = !hasImportedPlaylist && !hasDemoBeenViewed()
+  // Show demo helper on landing when user has no imported playlists
+  const showDemoHelper = !hasImportedPlaylist
 
   const isRefreshingCachedDataRef = useRef(isRefreshingCachedData)
   useEffect(() => {

@@ -14,13 +14,36 @@
   color-scheme: light;     /* Tells browser to use light system UI */
 }
 
+/* Universal box-sizing for predictable layouts */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /* Make body use the theme colors */
+html {
+  overflow-x: hidden; /* Prevent horizontal scroll - applied to html for iOS Safari */
+}
+
 body {
   margin: 0;
   overflow-x: hidden; /* Prevent horizontal scroll from focus outlines on iOS */
   font-family: var(--font-body, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
   background: var(--bg);
   color: var(--fg);
+}
+
+/*
+ * iOS Safari viewport fix:
+ * Focus outlines with outline-offset extend beyond element bounds.
+ * Without extra padding, outlines near viewport edge cause iOS to
+ * expand document width and zoom out. This wrapper ensures outlines
+ * stay within viewport by providing a safe zone.
+ */
+.app {
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 /* Dark theme override */

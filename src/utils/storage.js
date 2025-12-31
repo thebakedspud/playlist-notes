@@ -1,7 +1,6 @@
 // src/utils/storage.js
 // Provides versioned persistence for the playlist app state.
 
-/* eslint-env browser */
 // @ts-check
 
 import { MAX_TAG_LENGTH, MAX_TAGS_PER_TRACK, TAG_ALLOWED_RE } from '../features/tags/validation.js'
