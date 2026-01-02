@@ -81,11 +81,21 @@ src/features/
 ├── a11y/          # Accessibility (useAnnounce hook, LiveRegion)
 ├── account/       # Device recovery & identity management (useDeviceRecovery hook)
 ├── filter/        # Filtering utilities
-├── import/        # Import orchestration + adapters
-├── playlist/      # Playlist UI (PlaylistView, TrackCard)
+├── import/        # Import orchestration + adapters + caching
+├── landing/       # Landing/import screen (LandingScreen.jsx)
+├── notes/         # Note operations (useNoteHandlers, noteDeleteQueue)
+├── playlist/      # Playlist UI (PlaylistView, TrackCard, NoteList)
+├── podcast/       # Podcast-specific UI (PodcastView, feature flags)
 ├── recent/        # Recent playlists management
 ├── tags/          # Tag utilities, sync queue
 └── undo/          # Inline undo with 10-minute timers
+```
+
+### Global Hooks
+
+```
+src/hooks/
+└── useGlobalKeybindings.js  # Global keyboard shortcuts (Ctrl+Z undo, Home navigation)
 ```
 
 Each feature module contains:
@@ -181,7 +191,7 @@ All API routes are serverless functions deployed to Vercel:
 
 ### Versioned Storage Schema (v6)
 
-**Key:** `sta:v6`
+**Primary Key:** `sta:v6`
 
 **Shape:**
 ```javascript
@@ -193,12 +203,27 @@ All API routes are serverless functions deployed to Vercel:
   importedAt: ISO timestamp | null
   lastImportUrl: string
   tracks: PersistedTrack[]
-  importMeta: { provider, playlistId, snapshotId, cursor, hasMore, sourceUrl, debug }
-  notesByTrack: Record<trackId, string[]>
+  importMeta: {
+    provider, playlistId, snapshotId, cursor, hasMore, sourceUrl, debug,
+    contentKind: 'music' | 'podcast'  // content type classification
+  }
+  notesByTrack: Record<trackId, NoteObject[]>  // Notes now support timestamps
   tagsByTrack: Record<trackId, string[]>
   recentPlaylists: RecentPlaylist[]  // max 8, deduplicated by ${provider}:${playlistId}
 }
+
+// Extended track fields for podcasts:
+PersistedTrack: { id, title, artist, kind?, showId?, showName?, publisher?, description? }
+
+// Note object with optional timestamp range:
+NoteObject: { body: string, timestampMs?: number, timestampEndMs?: number }
 ```
+
+**Additional localStorage Keys:**
+- `sta:playlist-cache:v1` → Playlist import cache (max 5 entries)
+- `sta:pending-note-deletes` → Offline-first note deletion queue
+- `sta:pending-migration` → Migration snapshot for crash recovery
+- `st:deviceId` → Device identifier for multi-device sync
 
 **Migration System (v5 → v6):**
 1. On load, `loadAppState` normalizes legacy payloads into the v6 shape (including `uiPrefs`).
@@ -238,6 +263,41 @@ scheduleInlineUndo(trackId, { note: 'Original text', focusId: 'delete-btn' })
 - Each entry has a 10-minute timeout
 - Undo restores state + returns focus to original delete button
 - Integrates with `notesByTrack` in App.jsx
+
+---
+
+## Demo Playlist System
+
+New users see a demo playlist with pre-authored notes and tags to demonstrate the app's features.
+
+**Implementation:**
+- `src/data/demoPlaylist.js` → Demo configuration (DEMO_PLAYLIST_URL, DEMO_NOTES_BY_TRACK, DEMO_TAGS_BY_TRACK)
+- `src/components/DemoCard.jsx` → Landing page card for demo
+- Demo mode is **read-only** until user imports their own playlist
+
+**Behavior:**
+- Shows demo playlist when no real playlist has been imported
+- Pre-populated notes demonstrate timestamp linking and formatting
+- User can explore but cannot modify demo content
+- Importing any real playlist exits demo mode
+
+---
+
+## Podcast Support
+
+Podcast imports are behind a feature flag (`VITE_ENABLE_PODCASTS`).
+
+**Implementation:**
+- `src/features/podcast/PodcastView.jsx` → Lightweight wrapper around PlaylistView
+- `src/utils/podcastFlags.js` → Feature flag helpers
+- `importMeta.contentKind` distinguishes `'music'` vs `'podcast'`
+- Extended track fields: `kind`, `showId`, `showName`, `publisher`, `description`
+
+**Note Timestamps:**
+- `src/features/playlist/noteTimestamps.js` → Timestamp parsing/formatting
+- Supports MM:SS and HH:MM:SS formats
+- Range support: `timestampMs` to `timestampEndMs`
+- Timestamps render as clickable links (for future player integration)
 
 ---
 
@@ -295,42 +355,80 @@ focusById('track-note-btn-0')  // Uses requestAnimationFrame
 - **src/main.jsx** → Entry point (ThemeProvider wrapper)
 
 ### Features
+
+**Playlist State:**
 - **src/features/playlist/PlaylistProvider.jsx** → Context provider for playlist state (wraps useReducer)
 - **src/features/playlist/usePlaylistContext.js** → Context hooks (usePlaylistDispatch, narrow selectors)
 - **src/features/playlist/playlistReducer.js** → Pure reducer for playlist state transitions
 - **src/features/playlist/actions.js** → Validated action creators
-- **src/features/playlist/helpers.js** → Pure helper functions (computeHasLocalNotes, validateTag, etc.)
+- **src/features/playlist/helpers.js** → Pure helper functions (computeHasLocalNotes, validateTag, isPodcastTrack, etc.)
+- **src/features/playlist/contexts.js** → Separated context definitions (PlaylistStateContext, PlaylistDispatchContext, PlaylistSyncContext)
+- **src/features/playlist/buildInitialPlaylistState.js** → Bootstrap builder for transforming storage → reducer state
+- **src/features/playlist/noteTimestamps.js** → Timestamp parsing/formatting (MM:SS, HH:MM:SS, ranges)
+
+**Import System:**
 - **src/features/import/usePlaylistImportController.js** → High-level import controller (initial import, recents, reimport, load-more)
 - **src/features/import/usePlaylistImportFlow.js** → Lower-level adapter flow (guards, request lifecycles)
 - **src/features/import/useImportPlaylist.js** → Adapter registry + provider detection
 - **src/features/import/adapters/** → Spotify/YouTube/SoundCloud adapters
 - **src/features/import/normalizeTrack.js** → Track normalization
+- **src/features/import/playlistCache.js** → localStorage-based import caching (max 5 entries)
+- **src/features/import/playlistIdentity.js** → Canonical playlist identity/key derivation
+- **src/features/import/usePersistentPlaylistCache.js** → Hook for in-memory cache synced with localStorage
+
+**Notes:**
+- **src/features/notes/useNoteHandlers.js** → Centralized hook for note CRUD operations
+- **src/features/notes/noteDeleteQueue.js** → Offline-first queue for note deletions
+
+**Other Features:**
 - **src/features/account/useDeviceRecovery.js** → Device identity & recovery management hook
 - **src/features/tags/tagSyncQueue.js** → Debounced tag sync queue (exports createTagSyncScheduler)
 - **src/features/undo/useInlineUndo.js** → Inline undo hook
 - **src/features/a11y/useAnnounce.js** → Accessibility announcements
+- **src/hooks/useGlobalKeybindings.js** → Global keyboard shortcuts (Ctrl+Z, Home)
 
 ### Components
 - **src/features/playlist/PlaylistView.jsx** → Main playlist display
 - **src/features/playlist/TrackCard.jsx** → Individual track cards
+- **src/features/playlist/NoteList.jsx** → Note list with timestamp display
+- **src/features/landing/LandingScreen.jsx** → Landing/import screen
+- **src/features/podcast/PodcastView.jsx** → Podcast-specific UI wrapper
 - **src/features/recent/RecentPlaylists.jsx** → Recent playlists carousel
 - **src/components/RestoreDialog.jsx** → Recovery code input dialog
 - **src/components/RecoveryModal.jsx** → Display new recovery codes
 - **src/components/UndoPlaceholder.jsx** → Inline undo toast
 - **src/components/LiveRegion.jsx** → ARIA live region for announcements
+- **src/components/DemoCard.jsx** → Demo playlist card for new users
+- **src/components/ScrollArea.jsx** → Virtualized scroll container with position persistence
+- **src/components/TrackList.jsx** → Generic track list component
+- **src/components/AccountView.jsx** → Account management screen (recovery codes, device info)
+- **src/components/display/FontSettings.jsx** → Accessibility font selection UI
 
 ### Utilities
 - **src/utils/storage.js** → localStorage persistence + versioning
+- **src/utils/storageBootstrap.js** → SSR-safe state initialization helpers
 - **src/utils/focusById.js** → Focus management helper
+- **src/utils/notesTagsData.js** → Pure functions for notes/tags normalization, cloning, grouping
+- **src/utils/trackProcessing.js** → Track enrichment and timestamp normalization
+- **src/utils/podcastFlags.js** → Feature flag helpers for podcast imports
+- **src/utils/debug.js** → Debug utilities (DEBUG_FOCUS flag)
 - **src/lib/apiClient.js** → Fetch wrapper with device ID propagation
 - **src/lib/deviceState.js** → Device context management
 - **src/data/mockPlaylists.js** → Fallback mock data
+- **src/data/demoPlaylist.js** → Demo playlist with pre-authored notes/tags (read-only mode)
 
-### API
+### API Endpoints
 - **api/anon/bootstrap.js** → Device bootstrap endpoint
 - **api/anon/restore.js** → Recovery code restore endpoint
+- **api/anon/recovery.js** → Recovery code rotation (CSRF-protected, rate limited)
 - **api/db/notes.js** → Notes/tags sync endpoint
 - **api/spotify/token.js** → Spotify token exchange
+
+### API Library (`api/_lib/`)
+- **api/_lib/supabase.js** → Supabase client helpers
+- **api/_lib/argon.js** → Argon2 password hashing for recovery codes
+- **api/_lib/recovery.js** → Recovery code generation, hashing, fingerprinting
+- **api/spotify/originConfig.js** → CORS origin allowlist
 
 ---
 
@@ -346,12 +444,15 @@ focusById('track-note-btn-0')  // Uses requestAnimationFrame
 
 ## Testing Strategy
 
-### Test Organization (38 test files)
+### Test Organization (68 test files)
 ```
-src/__tests__/              → Integration tests
-src/features/**/__tests__/  → Feature-specific unit tests
-src/components/__tests__/   → Component tests
-api/**/__tests__/           → API endpoint tests
+src/__tests__/              → Integration tests (6 files)
+src/features/**/__tests__/  → Feature-specific unit tests (40 files)
+src/components/__tests__/   → Component tests (7 files)
+src/utils/__tests__/        → Utility tests (5 files)
+src/lib/__tests__/          → Library tests (2 files)
+src/hooks/__tests__/        → Hook tests (2 files)
+api/**/__tests__/           → API endpoint tests (6 files)
 ```
 
 ### Key Test Files
@@ -410,11 +511,26 @@ api/**/__tests__/           → API endpoint tests
 
 ## Documentation Files
 
+### Root Documentation
 - **README.md** → User-facing overview + accessibility checklist
 - **SECURITY.md** → Security policies and vulnerability reporting
 - **SECURITY_REFERENCE.md** → Detailed security implementation guide
+- **GEMINI.md** → Instructions for Gemini AI
+- **LAUNCH_PLAN.md** → Launch planning document
+- **current_issues.md** → Known issues tracker
+
+### Source Documentation
 - **src/docs/ORIENTATION.md** → Import flow map (UI → code mapping)
 - **src/AGENTS.MD** → AI agent guidelines for contributing
+
+### Planning Documents (`docs/`)
+The `docs/` directory contains 18+ planning documents for features and investigations:
+- demo-playlist-plan.md
+- podcast-import-plan.md
+- recovery-sync-bug-analysis.md
+- virtual-tracklist-phase1.md
+- visual-hierarchy-improvements-plan.md
+- And more...
 
 ---
 
