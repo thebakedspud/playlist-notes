@@ -26,14 +26,15 @@ const getTagsSignature = (tags) =>
 
 /**
  * Provider component that manages playlist state via reducer
- * 
+ *
  * @param {Object} props
  * @param {typeof initialPlaylistState} props.initialState - Initial state for the reducer
  * @param {{ deviceId: string | null, anonId: string | null }} props.anonContext - Device context for sync
  * @param {(status: BackgroundSyncState) => void} [props.onInitialSyncStatusChange]
+ * @param {boolean} [props.syncEnabled=false] - Whether to enable remote sync (defer until playlist screen)
  * @param {import('react').ReactNode} props.children - Child components
  */
-export function PlaylistStateProvider({ initialState, anonContext, onInitialSyncStatusChange, children }) {
+export function PlaylistStateProvider({ initialState, anonContext, onInitialSyncStatusChange, syncEnabled = false, children }) {
   const [state, dispatch] = useReducer(playlistReducer, initialState)
   const tagSyncSchedulerRef = useRef(null)
   const initialSyncStatusRef = useRef('idle')
@@ -151,10 +152,12 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
     [persistPendingTagQueue],
   )
 
-  // Remote sync: fetch notes/tags from server on mount when anonId is available
+  // Remote sync: fetch notes/tags from server when entering playlist screen
+  // Deferred via syncEnabled prop to avoid network contention during landing page LCP
   // Note: We intentionally don't check for local data - after recovery restore,
   // the user may have no local tracks yet but needs to fetch remote notes
   useEffect(() => {
+    if (!syncEnabled) return
     if (!anonContext?.deviceId || !anonContext?.anonId) return
     if (initialSyncStatusRef.current === 'complete') return
     if (syncAttemptedRef.current) return
@@ -282,7 +285,7 @@ export function PlaylistStateProvider({ initialState, anonContext, onInitialSync
         cancelIdleCallback(deferredHandle)
       }
     }
-  }, [anonContext?.deviceId, anonContext?.anonId, initialState?.tracks, markSyncError, updateInitialSyncStatus])
+  }, [syncEnabled, anonContext?.deviceId, anonContext?.anonId, initialState?.tracks, markSyncError, updateInitialSyncStatus])
 
   // Helper to send tag update to server
   const sendTagUpdate = useCallback(

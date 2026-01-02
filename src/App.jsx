@@ -87,7 +87,8 @@ const PODCASTS_ENABLED = isPodcastImportEnabled()
  *  persistedTracks: any,
  *  initialScreen: 'landing' | 'playlist' | 'podcast' | 'account',
  *  onAnonContextChange: Function,
- *  initialSyncStatus: BackgroundSyncState
+ *  initialSyncStatus: BackgroundSyncState,
+ *  onScreenChange: (screen: 'landing' | 'playlist' | 'podcast' | 'account') => void
  * }} props
  */
 function AppInner({
@@ -98,6 +99,7 @@ function AppInner({
   initialScreen,
   onAnonContextChange,
   initialSyncStatus,
+  onScreenChange,
 }) {
   const migrationSnapshotRef = useRef(pendingMigrationSnapshot)
 
@@ -106,6 +108,11 @@ function AppInner({
     /** @type {'landing' | 'playlist' | 'podcast' | 'account'} */(initialScreen)
   )
   const goToLanding = useCallback(() => { setScreen('landing') }, [setScreen])
+
+  // Notify parent of screen changes for sync deferral
+  useEffect(() => {
+    onScreenChange?.(screen)
+  }, [screen, onScreenChange])
 
   const { message: announceMsg, announce } = useAnnounce({ debounceMs: 60 })
 
@@ -1176,11 +1183,19 @@ function AppWithDeviceContext({ persisted, pendingMigrationSnapshot, initialRece
     setInitialSyncStatus(status)
   }, [])
 
+  // Track whether we're on a screen that should trigger sync
+  // Sync is deferred until user views playlist/podcast to avoid LCP contention
+  const [syncEnabled, setSyncEnabled] = useState(initialScreen === 'playlist' || initialScreen === 'podcast')
+  const handleScreenChange = useCallback((screen) => {
+    setSyncEnabled(screen === 'playlist' || screen === 'podcast')
+  }, [])
+
   return (
     <PlaylistStateProvider
       initialState={initialPlaylistStateWithData}
       anonContext={anonContext}
       onInitialSyncStatusChange={handleInitialSyncStatusChange}
+      syncEnabled={syncEnabled}
     >
       <AppInner
         persisted={persisted}
@@ -1190,6 +1205,7 @@ function AppWithDeviceContext({ persisted, pendingMigrationSnapshot, initialRece
         initialScreen={initialScreen}
         onAnonContextChange={setAnonContext}
         initialSyncStatus={initialSyncStatus}
+        onScreenChange={handleScreenChange}
       />
     </PlaylistStateProvider>
   )

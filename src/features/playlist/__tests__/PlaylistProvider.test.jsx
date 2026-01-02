@@ -160,9 +160,10 @@ describe('PlaylistProvider', () => {
       }
 
       render(
-        <PlaylistStateProvider 
-          initialState={stateWithLocalData} 
+        <PlaylistStateProvider
+          initialState={stateWithLocalData}
           anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <TestChild />
         </PlaylistStateProvider>
@@ -252,6 +253,7 @@ describe('PlaylistProvider', () => {
             initialState={stateWithLocalData}
             anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
             onInitialSyncStatusChange={onStatusChange}
+            syncEnabled={true}
           >
             <TestChild />
           </PlaylistStateProvider>,
@@ -285,9 +287,10 @@ describe('PlaylistProvider', () => {
       }
 
       render(
-        <PlaylistStateProvider 
-          initialState={initialPlaylistState} 
+        <PlaylistStateProvider
+          initialState={initialPlaylistState}
           anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <TestChild />
         </PlaylistStateProvider>
@@ -295,7 +298,7 @@ describe('PlaylistProvider', () => {
 
       // Wait for the deferred sync to run
       await new Promise(resolve => setTimeout(resolve, 50))
-      
+
       // Sync should run even with no local tracks - needed for recovery restore
       expect(mockedApiFetch).toHaveBeenCalledWith('/api/db/notes', expect.any(Object))
     })
@@ -328,9 +331,10 @@ describe('PlaylistProvider', () => {
       }
 
       render(
-        <PlaylistStateProvider 
-          initialState={customState} 
+        <PlaylistStateProvider
+          initialState={customState}
           anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <TestChild />
         </PlaylistStateProvider>
@@ -356,9 +360,10 @@ describe('PlaylistProvider', () => {
       }
 
       render(
-        <PlaylistStateProvider 
-          initialState={stateWithLocalData} 
+        <PlaylistStateProvider
+          initialState={stateWithLocalData}
           anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <TestChild />
         </PlaylistStateProvider>
@@ -390,9 +395,10 @@ describe('PlaylistProvider', () => {
       }
 
       render(
-        <PlaylistStateProvider 
-          initialState={stateWithLocalData} 
+        <PlaylistStateProvider
+          initialState={stateWithLocalData}
           anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <TestChild />
         </PlaylistStateProvider>
@@ -420,9 +426,10 @@ describe('PlaylistProvider', () => {
       }
 
       render(
-        <PlaylistStateProvider 
-          initialState={stateWithLocalData} 
+        <PlaylistStateProvider
+          initialState={stateWithLocalData}
           anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <div>Test</div>
         </PlaylistStateProvider>
@@ -458,9 +465,10 @@ describe('PlaylistProvider', () => {
       })
 
       const { rerender } = render(
-        <PlaylistStateProvider 
-          initialState={stateWithLocalData} 
+        <PlaylistStateProvider
+          initialState={stateWithLocalData}
           anonContext={{ deviceId: 'device-1', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <div>Test</div>
         </PlaylistStateProvider>
@@ -471,9 +479,10 @@ describe('PlaylistProvider', () => {
       })
 
       rerender(
-        <PlaylistStateProvider 
-          initialState={stateWithLocalData} 
+        <PlaylistStateProvider
+          initialState={stateWithLocalData}
           anonContext={{ deviceId: 'device-2', anonId: 'anon-1' }}
+          syncEnabled={true}
         >
           <div>Test</div>
         </PlaylistStateProvider>
